@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PharmTrack - Manage Users</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            display: flex;
+        }
+
+        /* SIDEBAR */
+        .sidebar {
+            width: 240px;
+            background: #1a1a2e;
+            min-height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar-header {
+            padding: 24px 20px;
+            border-bottom: 1px solid #2a2a4a;
+        }
+        .sidebar-header h2 {
+            color: white;
+            font-size: 20px;
+        }
+        .sidebar-header p {
+            color: #aaa;
+            font-size: 11px;
+            margin-top: 4px;
+        }
+        .nav-section {
+            padding: 16px 20px 6px;
+            font-size: 11px;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 20px;
+            color: #ccc;
+            text-decoration: none;
+            font-size: 14px;
+            border-left: 3px solid transparent;
+            transition: all 0.2s;
+        }
+        .nav-item:hover {
+            background: #2a2a4a;
+            color: white;
+        }
+        .nav-item.active {
+            background: #2a2a4a;
+            color: white;
+            border-left-color: #4e9af1;
+        }
+        .sidebar-footer {
+            margin-top: auto;
+            padding: 16px 20px;
+            border-top: 1px solid #2a2a4a;
+        }
+        .sidebar-footer p {
+            color: #aaa;
+            font-size: 11px;
+        }
+        .sidebar-footer h4 {
+            color: white;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+        .sidebar-footer small {
+            color: #4e9af1;
+            font-size: 12px;
+        }
+
+        /* MAIN */
+        .main {
+            margin-left: 240px;
+            flex: 1;
+            padding: 28px;
+        }
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        .topbar h1 {
+            font-size: 22px;
+            color: #111;
+        }
+        .topbar p {
+            font-size: 13px;
+            color: #888;
+            margin-top: 2px;
+        }
+        .logout-btn {
+            background: #e74c3c;
+            color: white;
+            padding: 9px 18px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        /* TWO COLUMN */
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        /* CARD */
+        .card {
+            background: white;
+            border-radius: 12px;
+            border: 1px solid #e8e8e8;
+            padding: 24px;
+        }
+        .card h3 {
+            font-size: 16px;
+            color: #111;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 6px;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1.5px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #333;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #185FA5;
+        }
+        .btn-primary {
+            background: #185FA5;
+            color: white;
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .btn-primary:hover { background: #0C447C; }
+
+        /* ROLE INFO */
+        .role-info {
+            background: #f0f7ff;
+            border: 1px solid #c8e1ff;
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .role-info h4 {
+            font-size: 13px;
+            color: #185FA5;
+            margin-bottom: 12px;
+        }
+        .role-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .role-badge {
+            padding: 3px 10px;
+            border-radius: 99px;
+            font-size: 11px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+        .badge-admin { background: #e8e3ff; color: #4a3aaa; }
+        .badge-pharmacist { background: #d5f5e3; color: #1e8449; }
+        .badge-storekeeper { background: #fef9e7; color: #b7950b; }
+        .role-desc {
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* TABLE */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #111;
+        }
+        .search-box {
+            padding: 8px 14px;
+            border: 1.5px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 13px;
+            width: 220px;
+        }
+        .table-wrap {
+            background: white;
+            border-radius: 12px;
+            border: 1px solid #e8e8e8;
+            overflow: hidden;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        th {
+            background: #f8f9fa;
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 12px;
+            color: #666;
+            border-bottom: 1px solid #e8e8e8;
+        }
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #f5f5f5;
+            color: #333;
+        }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: #f8f9fa; }
+        .badge {
+            padding: 4px 10px;
+            border-radius: 99px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        .action-btn {
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            border: none;
+            margin-right: 4px;
+        }
+        .btn-edit {
+            background: #eaf3fb;
+            color: #185FA5;
+        }
+        .btn-delete {
+            background: #fdecea;
+            color: #a93226;
+        }
+    </style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+    <div class="sidebar-header">
+        <h2>PharmTrack</h2>
+        <p>Kiambu Sub-County Hospital</p>
+    </div>
+
+    <div class="nav-section">Main</div>
+    <a href="dashboard.html" class="nav-item">Dashboard</a>
+    <a href="stock.html" class="nav-item">Stock Management</a>
+    <a href="alerts.html" class="nav-item">
+        Alerts
+        <span style="margin-left:auto;background:#e74c3c;color:white;border-radius:99px;padding:1px 7px;font-size:11px">3</span>
+    </a>
+
+    <div class="nav-section">Reports</div>
+    <a href="audit.html" class="nav-item">Stock Audit</a>
+    <a href="reports.html" class="nav-item">Reports</a>
+
+    <div class="nav-section">Admin</div>
+    <a href="users.html" class="nav-item active">Manage Users</a>
+
+    <div class="sidebar-footer">
+        <p>Logged in as</p>
+        <h4>Linet Kipkemboi</h4>
+        <small>Administrator</small>
+    </div>
+</div>
+
+<!-- MAIN CONTENT -->
+<div class="main">
+
+    <div class="topbar">
+        <div>
+            <h1>Manage Users</h1>
+            <p>Add and manage system users and their roles</p>
+        </div>
+        <a href="index.html" class="logout-btn">Log Out</a>
+    </div>
+
+    <!-- TWO COLUMN -->
+    <div class="two-col">
+
+        <!-- ADD USER FORM -->
+        <div class="card">
+            <h3>Add New User</h3>
+            <form autocomplete="off">
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" placeholder="Enter full name"
+                           autocomplete="off" readonly
+                           onfocus="this.removeAttribute('readonly');">
+                </div>
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" placeholder="Enter username"
+                           autocomplete="off" readonly
+                           onfocus="this.removeAttribute('readonly');">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" placeholder="Enter password"
+                           autocomplete="new-password" readonly
+                           onfocus="this.removeAttribute('readonly');">
+                </div>
+                <div class="form-group">
+                    <label>Confirm Password</label>
+                    <input type="password" placeholder="Confirm password"
+                           autocomplete="new-password" readonly
+                           onfocus="this.removeAttribute('readonly');">
+                </div>
+                <div class="form-group">
+                    <label>Role</label>
+                    <select>
+                        <option value="">Select role</option>
+                        <option>admin</option>
+                        <option>pharmacist</option>
+                        <option>storekeeper</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn-primary">Add User</button>
+            </form>
+        </div>
+
+        <!-- ROLE DESCRIPTIONS -->
+        <div class="card">
+            <h3>User Roles</h3>
+            <div class="role-info">
+                <h4>What each role can do</h4>
+                <div class="role-item">
+                    <span class="role-badge badge-admin">Admin</span>
+                    <div class="role-desc">Full access to all pages. Can add, edit and delete users, medicines and transactions. Can view all reports and audits.</div>
+                </div>
+                <div class="role-item">
+                    <span class="role-badge badge-pharmacist">Pharmacist</span>
+                    <div class="role-desc">Can record stock out transactions when issuing medicines to patients. Can view stock levels, alerts and reports.</div>
+                </div>
+                <div class="role-item">
+                    <span class="role-badge badge-storekeeper">Storekeeper</span>
+                    <div class="role-desc">Can record stock in transactions when receiving medicines from suppliers. Can view stock levels and alerts.</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- USERS TABLE -->
+    <div class="section-header">
+        <div class="section-title">All System Users</div>
+        <input type="text" class="search-box" placeholder="Search user...">
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Full Name</th>
+                    <th>Username</th>
+                    <th>Role</th>
+                    <th>Date Added</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>1</td>
+                    <td>Linet Kipkemboi</td>
+                    <td>linet</td>
+                    <td><span class="badge badge-admin">Admin</span></td>
+                    <td>01 Jan 2026</td>
+                    <td>
+                        <button class="action-btn btn-edit">Edit</button>
+                        <button class="action-btn btn-delete">Delete</button>
+                    </td>
+                </tr>
+                <tr>
+                    <td>2</td>
+                    <td>James Otieno</td>
+                    <td>james</td>
+                    <td><span class="badge badge-storekeeper">Storekeeper</span></td>
+                    <td>01 Jan 2026</td>
+                    <td>
+                        <button class="action-btn btn-edit">Edit</button>
+                        <button class="action-btn btn-delete">Delete</button>
+                    </td>
+                </tr>
+                <tr>
+                    <td>3</td>
+                    <td>Mary Wanjiku</td>
+                    <td>mary</td>
+                    <td><span class="badge badge-pharmacist">Pharmacist</span></td>
+                    <td>15 Jan 2026</td>
+                    <td>
+                        <button class="action-btn btn-edit">Edit</button>
+                        <button class="action-btn btn-delete">Delete</button>
+                    </td>
+                </tr>
+                <tr>
+                    <td>4</td>
+                    <td>Peter Kamau</td>
+                    <td>peter</td>
+                    <td><span class="badge badge-pharmacist">Pharmacist</span></td>
+                    <td>20 Jan 2026</td>
+                    <td>
+                        <button class="action-btn btn-edit">Edit</button>
+                        <button class="action-btn btn-delete">Delete</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+</div>
+
+</body>
+</html>
