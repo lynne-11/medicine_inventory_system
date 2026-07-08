@@ -6,17 +6,9 @@ if (!isset($_SESSION['user_id'])) {
 }
 include 'db.php';
 
+$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $alert_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as count FROM alerts WHERE status = 'unread'"))['count'];
 
-// GET MEDICINE ID
-if (!isset($_GET['id'])) {
-    header("Location: stock.php");
-    exit();
-}
-
-$id = $_GET['id'];
-
-// GET MEDICINE DETAILS
 $medicine = mysqli_fetch_assoc(mysqli_query($conn, "
     SELECT m.*, sl.current_quantity
     FROM medicines m
@@ -29,32 +21,6 @@ if (!$medicine) {
     exit();
 }
 
-// GET TRANSACTION HISTORY
-$transactions = mysqli_query($conn, "
-    SELECT st.*, u.name as user_name
-    FROM stock_transactions st
-    JOIN users u ON st.user_id = u.id
-    WHERE st.medicine_id = $id
-    ORDER BY st.created_at DESC
-");
-
-// GET AUDIT HISTORY
-$audits = mysqli_query($conn, "
-    SELECT al.*, u.name as user_name
-    FROM audit_log al
-    JOIN users u ON al.checked_by = u.id
-    WHERE al.medicine_id = $id
-    ORDER BY al.checked_at DESC
-");
-
-// GET ALERTS
-$alerts = mysqli_query($conn, "
-    SELECT * FROM alerts
-    WHERE medicine_id = $id
-    ORDER BY created_at DESC
-");
-
-// CALCULATE STATS
 $total_in = mysqli_fetch_assoc(mysqli_query($conn, "SELECT SUM(quantity) as total FROM stock_transactions WHERE medicine_id = $id AND type = 'stock_in'"))['total'] ?? 0;
 $total_out = mysqli_fetch_assoc(mysqli_query($conn, "SELECT SUM(quantity) as total FROM stock_transactions WHERE medicine_id = $id AND type = 'stock_out'"))['total'] ?? 0;
 $total_transactions = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as count FROM stock_transactions WHERE medicine_id = $id"))['count'] ?? 0;
@@ -68,19 +34,12 @@ $total_transactions = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; background: #f4f6f8; display: flex; }
-        .sidebar {
-            width: 240px; background: #1a1a2e; min-height: 100vh;
-            position: fixed; top: 0; left: 0; display: flex; flex-direction: column;
-        }
+        .sidebar { width: 240px; background: #1a1a2e; min-height: 100vh; position: fixed; top: 0; left: 0; display: flex; flex-direction: column; z-index: 100; transition: all 0.3s; }
         .sidebar-header { padding: 24px 20px; border-bottom: 1px solid #2a2a4a; }
         .sidebar-header h2 { color: white; font-size: 20px; }
         .sidebar-header p { color: #aaa; font-size: 11px; margin-top: 4px; }
         .nav-section { padding: 16px 20px 6px; font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.05em; }
-        .nav-item {
-            display: flex; align-items: center; gap: 10px; padding: 12px 20px;
-            color: #ccc; text-decoration: none; font-size: 14px;
-            border-left: 3px solid transparent; transition: all 0.2s;
-        }
+        .nav-item { display: flex; align-items: center; gap: 10px; padding: 12px 20px; color: #ccc; text-decoration: none; font-size: 14px; border-left: 3px solid transparent; transition: all 0.2s; }
         .nav-item:hover { background: #2a2a4a; color: white; }
         .nav-item.active { background: #2a2a4a; color: white; border-left-color: #4e9af1; }
         .sidebar-footer { margin-top: auto; padding: 16px 20px; border-top: 1px solid #2a2a4a; }
@@ -88,69 +47,82 @@ $total_transactions = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as
         .sidebar-footer h4 { color: white; font-size: 14px; margin-top: 4px; }
         .sidebar-footer small { color: #4e9af1; font-size: 12px; }
         .alert-badge { margin-left: auto; background: #e74c3c; color: white; border-radius: 99px; padding: 1px 7px; font-size: 11px; }
-        .main { margin-left: 240px; flex: 1; padding: 28px; }
-        .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .main { margin-left: 240px; flex: 1; padding: 28px; transition: all 0.3s; }
+        .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
         .topbar h1 { font-size: 22px; color: #111; }
         .topbar p { font-size: 13px; color: #888; margin-top: 2px; }
-        .topbar-right { display: flex; gap: 10px; align-items: center; }
-        .back-btn { background: #f4f6f8; color: #333; padding: 9px 18px; border-radius: 8px; text-decoration: none; font-size: 13px; font-weight: bold; border: 1px solid #e0e0e0; }
+        .topbar-right { display: flex; align-items: center; gap: 10px; }
         .logout-btn { background: #e74c3c; color: white; padding: 9px 18px; border-radius: 8px; text-decoration: none; font-size: 13px; font-weight: bold; }
-
-        /* MEDICINE INFO CARD */
-        .medicine-card {
-            background: white; border-radius: 12px; border: 1px solid #e8e8e8;
-            padding: 24px; margin-bottom: 24px;
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .medicine-info h2 { font-size: 22px; color: #111; margin-bottom: 8px; }
-        .medicine-meta { display: flex; gap: 16px; flex-wrap: wrap; }
-        .meta-item { font-size: 13px; color: #666; }
-        .meta-item strong { color: #333; }
-        .stock-display { text-align: center; }
-        .stock-number { font-size: 48px; font-weight: bold; color: #185FA5; }
-        .stock-label { font-size: 13px; color: #888; margin-top: 4px; }
-        .badge { padding: 4px 12px; border-radius: 99px; font-size: 12px; font-weight: bold; }
+        .back-btn { background: #185FA5; color: white; padding: 9px 18px; border-radius: 8px; text-decoration: none; font-size: 13px; font-weight: bold; }
+        .menu-btn { display: none; background: #185FA5; color: white; border: none; padding: 9px 14px; border-radius: 8px; font-size: 18px; cursor: pointer; }
+        /* Medicine Header Card */
+        .med-header { background: white; border-radius: 12px; border: 1px solid #e8e8e8; padding: 24px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+        .med-info h2 { font-size: 22px; color: #111; margin-bottom: 6px; }
+        .med-info p { font-size: 13px; color: #888; margin-bottom: 4px; }
+        .med-stock { text-align: right; }
+        .med-stock .qty { font-size: 48px; font-weight: bold; color: #185FA5; line-height: 1; }
+        .med-stock .qty-label { font-size: 13px; color: #888; margin-top: 4px; }
+        .badge { padding: 4px 12px; border-radius: 99px; font-size: 11px; font-weight: bold; }
         .badge-ok { background: #d5f5e3; color: #1e8449; }
         .badge-low { background: #fef9e7; color: #b7950b; }
         .badge-empty { background: #fdecea; color: #a93226; }
-
-        /* STATS */
+        /* Stats */
         .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
         .stat-card { background: white; padding: 20px; border-radius: 12px; border: 1px solid #e8e8e8; }
         .stat-card .label { font-size: 12px; color: #888; margin-bottom: 8px; }
         .stat-card .value { font-size: 28px; font-weight: bold; color: #111; }
-        .stat-card.success .value { color: #27ae60; }
-        .stat-card.danger .value { color: #e74c3c; }
-
-        /* TABS */
-        .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
-        .tab {
-            padding: 9px 20px; border-radius: 8px; font-size: 13px;
-            cursor: pointer; border: 1px solid #e0e0e0;
-            background: white; color: #666; font-weight: bold;
-        }
-        .tab.active { background: #185FA5; color: white; border-color: #185FA5; }
-
-        /* TABLE */
-        .table-wrap { background: white; border-radius: 12px; border: 1px solid #e8e8e8; overflow: hidden; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .stat-card.in .value { color: #27ae60; }
+        .stat-card.out .value { color: #e74c3c; }
+        .stat-card.total .value { color: #185FA5; }
+        /* Tabs */
+        .tabs { display: flex; gap: 4px; margin-bottom: 16px; background: white; border-radius: 10px; padding: 6px; border: 1px solid #e8e8e8; width: fit-content; flex-wrap: wrap; }
+        .tab-btn { padding: 8px 20px; border-radius: 8px; border: none; font-size: 13px; font-weight: bold; cursor: pointer; background: transparent; color: #888; transition: all 0.2s; }
+        .tab-btn.active { background: #185FA5; color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        /* Tables */
+        .table-wrap { background: white; border-radius: 12px; border: 1px solid #e8e8e8; overflow: hidden; overflow-x: auto; margin-bottom: 24px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 500px; }
         th { background: #f8f9fa; padding: 12px 16px; text-align: left; font-size: 12px; color: #666; border-bottom: 1px solid #e8e8e8; }
         td { padding: 12px 16px; border-bottom: 1px solid #f5f5f5; color: #333; }
         tr:last-child td { border-bottom: none; }
         tr:hover td { background: #f8f9fa; }
-        .badge-in { background: #d5f5e3; color: #1e8449; padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: bold; }
-        .badge-out { background: #fdecea; color: #a93226; padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: bold; }
-        .badge-disc { background: #fdecea; color: #a93226; padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: bold; }
-        .badge-nodisc { background: #d5f5e3; color: #1e8449; padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: bold; }
+        .badge-in { background: #d5f5e3; color: #1e8449; }
+        .badge-out { background: #fdecea; color: #a93226; }
+        .badge-resolved { background: #d5f5e3; color: #1e8449; }
+        .badge-unread { background: #fef9e7; color: #b7950b; }
+        .badge-disc { background: #fdecea; color: #a93226; }
         .empty-state { text-align: center; padding: 30px; color: #aaa; font-size: 13px; }
-
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
+        /* Overlay */
+        .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 99; }
+        .overlay.open { display: block; }
+        /* Responsive */
+        @media (max-width: 900px) {
+            .stats-grid { grid-template-columns: repeat(3, 1fr); }
+            .med-header { flex-direction: column; align-items: flex-start; }
+            .med-stock { text-align: left; }
+        }
+        @media (max-width: 768px) {
+            .sidebar { left: -240px; }
+            .sidebar.open { left: 0; }
+            .main { margin-left: 0; padding: 16px; }
+            .menu-btn { display: block; }
+            .stats-grid { grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+            .stat-card { padding: 14px; }
+            .stat-card .value { font-size: 22px; }
+            .med-stock .qty { font-size: 36px; }
+            .tabs { width: 100%; }
+            .tab-btn { flex: 1; text-align: center; padding: 8px 10px; font-size: 12px; }
+        }
+        @media (max-width: 480px) {
+            .stats-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
+<div class="overlay" id="overlay" onclick="closeSidebar()"></div>
 
-<div class="sidebar">
+<div class="sidebar" id="sidebar">
     <div class="sidebar-header">
         <h2>PharmTrack</h2>
         <p>Kiambu Sub-County Hospital</p>
@@ -167,8 +139,10 @@ $total_transactions = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as
     <div class="nav-section">Reports</div>
     <a href="audit.php" class="nav-item">Stock Audit</a>
     <a href="reports.php" class="nav-item">Reports</a>
+    <?php if ($_SESSION['user_role'] == 'admin') { ?>
     <div class="nav-section">Admin</div>
     <a href="users.php" class="nav-item">Manage Users</a>
+    <?php } ?>
     <div class="sidebar-footer">
         <p>Logged in as</p>
         <h4><?php echo $_SESSION['user_name']; ?></h4>
@@ -180,67 +154,64 @@ $total_transactions = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as
     <div class="topbar">
         <div>
             <h1>View Medicine</h1>
-            <p>Full details and history for this medicine</p>
+            <p>Full profile and history</p>
         </div>
         <div class="topbar-right">
-            <a href="stock.php" class="back-btn">Back to Stock</a>
+            <button class="menu-btn" onclick="openSidebar()">☰</button>
+            <a href="stock.php" class="back-btn">← Back</a>
             <a href="logout.php" class="logout-btn">Log Out</a>
         </div>
     </div>
 
-    <!-- MEDICINE INFO -->
-    <div class="medicine-card">
-        <div class="medicine-info">
+    <!-- Medicine Header -->
+    <div class="med-header">
+        <div class="med-info">
             <h2><?php echo $medicine['name']; ?></h2>
-            <div class="medicine-meta">
-                <div class="meta-item"><strong>Category:</strong> <?php echo $medicine['category']; ?></div>
-                <div class="meta-item"><strong>Unit:</strong> <?php echo $medicine['unit']; ?></div>
-                <div class="meta-item"><strong>Min Threshold:</strong> <?php echo $medicine['min_threshold']; ?></div>
-                <div class="meta-item"><strong>Added:</strong> <?php echo date('d M Y', strtotime($medicine['created_at'])); ?></div>
-                <div class="meta-item">
-                    <?php
-                    $qty = $medicine['current_quantity'] ?? 0;
-                    if ($qty == 0) {
-                        echo "<span class='badge badge-empty'>Out of Stock</span>";
-                    } elseif ($qty <= $medicine['min_threshold']) {
-                        echo "<span class='badge badge-low'>Low Stock</span>";
-                    } else {
-                        echo "<span class='badge badge-ok'>OK</span>";
-                    }
-                    ?>
-                </div>
-            </div>
+            <p>Category: <strong><?php echo $medicine['category']; ?></strong></p>
+            <p>Unit: <strong><?php echo $medicine['unit']; ?></strong></p>
+            <p>Minimum Threshold: <strong><?php echo $medicine['min_threshold']; ?> <?php echo $medicine['unit']; ?></strong></p>
+            <p>Date Added: <strong><?php echo date('d M Y', strtotime($medicine['created_at'])); ?></strong></p>
+            <?php
+            $qty = $medicine['current_quantity'] ?? 0;
+            if ($qty == 0) {
+                echo "<span class='badge badge-empty' style='margin-top:8px;display:inline-block'>Out of Stock</span>";
+            } elseif ($qty <= $medicine['min_threshold']) {
+                echo "<span class='badge badge-low' style='margin-top:8px;display:inline-block'>Low Stock</span>";
+            } else {
+                echo "<span class='badge badge-ok' style='margin-top:8px;display:inline-block'>In Stock</span>";
+            }
+            ?>
         </div>
-        <div class="stock-display">
-            <div class="stock-number"><?php echo $qty; ?></div>
-            <div class="stock-label"><?php echo $medicine['unit']; ?> in stock</div>
+        <div class="med-stock">
+            <div class="qty"><?php echo $qty; ?></div>
+            <div class="qty-label"><?php echo $medicine['unit']; ?> in stock</div>
         </div>
     </div>
 
-    <!-- STATS -->
+    <!-- Stats -->
     <div class="stats-grid">
-        <div class="stat-card success">
-            <div class="label">Total Stock In</div>
+        <div class="stat-card in">
+            <div class="label">Total Stock Received</div>
             <div class="value"><?php echo number_format($total_in); ?></div>
         </div>
-        <div class="stat-card danger">
-            <div class="label">Total Stock Out</div>
+        <div class="stat-card out">
+            <div class="label">Total Stock Issued</div>
             <div class="value"><?php echo number_format($total_out); ?></div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card total">
             <div class="label">Total Transactions</div>
             <div class="value"><?php echo $total_transactions; ?></div>
         </div>
     </div>
 
-    <!-- TABS -->
+    <!-- Tabs -->
     <div class="tabs">
-        <div class="tab active" onclick="showTab('transactions', this)">Transaction History</div>
-        <div class="tab" onclick="showTab('audits', this)">Audit History</div>
-        <div class="tab" onclick="showTab('alerts', this)">Alerts</div>
+        <button class="tab-btn active" onclick="showTab('transactions', this)">Transaction History</button>
+        <button class="tab-btn" onclick="showTab('audit', this)">Audit History</button>
+        <button class="tab-btn" onclick="showTab('alerts', this)">Alerts</button>
     </div>
 
-    <!-- TRANSACTIONS TAB -->
+    <!-- Transaction History Tab -->
     <div class="tab-content active" id="tab-transactions">
         <div class="table-wrap">
             <table>
@@ -257,6 +228,13 @@ $total_transactions = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as
                 </thead>
                 <tbody>
                 <?php
+                $transactions = mysqli_query($conn, "
+                    SELECT st.*, u.name as user_name
+                    FROM stock_transactions st
+                    JOIN users u ON st.user_id = u.id
+                    WHERE st.medicine_id = $id
+                    ORDER BY st.created_at DESC
+                ");
                 if (mysqli_num_rows($transactions) > 0) {
                     $i = 1;
                     while ($row = mysqli_fetch_assoc($transactions)) {
@@ -264,10 +242,10 @@ $total_transactions = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as
                         $label = $row['type'] == 'stock_in' ? 'Stock In' : 'Stock Out';
                         $date = date('d M Y', strtotime($row['created_at']));
                         $time = date('h:i A', strtotime($row['created_at']));
-                        $notes = $row['notes'] ? $row['notes'] : '-';
+                        $notes = $row['notes'] ? $row['notes'] : '—';
                         echo "<tr>
                             <td>{$i}</td>
-                            <td><span class='{$badge}'>{$label}</span></td>
+                            <td><span class='badge {$badge}'>{$label}</span></td>
                             <td>{$row['quantity']}</td>
                             <td>{$notes}</td>
                             <td>{$row['user_name']}</td>
@@ -277,7 +255,7 @@ $total_transactions = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as
                         $i++;
                     }
                 } else {
-                    echo "<tr><td colspan='7' class='empty-state'>No transactions yet for this medicine</td></tr>";
+                    echo "<tr><td colspan='7' class='empty-state'>No transactions recorded yet.</td></tr>";
                 }
                 ?>
                 </tbody>
@@ -285,8 +263,8 @@ $total_transactions = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as
         </div>
     </div>
 
-    <!-- AUDITS TAB -->
-    <div class="tab-content" id="tab-audits">
+    <!-- Audit History Tab -->
+    <div class="tab-content" id="tab-audit">
         <div class="table-wrap">
             <table>
                 <thead>
@@ -302,13 +280,20 @@ $total_transactions = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as
                 </thead>
                 <tbody>
                 <?php
+                $audits = mysqli_query($conn, "
+                    SELECT al.*, u.name as user_name
+                    FROM audit_log al
+                    JOIN users u ON al.checked_by = u.id
+                    WHERE al.medicine_id = $id
+                    ORDER BY al.checked_at DESC
+                ");
                 if (mysqli_num_rows($audits) > 0) {
                     $i = 1;
                     while ($row = mysqli_fetch_assoc($audits)) {
                         $disc = $row['discrepancy'];
                         $status = $disc == 0
-                            ? "<span class='badge-nodisc'>No Discrepancy</span>"
-                            : "<span class='badge-disc'>Discrepancy ({$disc})</span>";
+                            ? "<span class='badge badge-ok'>No Discrepancy</span>"
+                            : "<span class='badge badge-disc'>Discrepancy</span>";
                         $date = date('d M Y', strtotime($row['checked_at']));
                         echo "<tr>
                             <td>{$i}</td>
@@ -322,7 +307,7 @@ $total_transactions = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as
                         $i++;
                     }
                 } else {
-                    echo "<tr><td colspan='7' class='empty-state'>No audit records for this medicine</td></tr>";
+                    echo "<tr><td colspan='7' class='empty-state'>No audit records yet.</td></tr>";
                 }
                 ?>
                 </tbody>
@@ -330,7 +315,7 @@ $total_transactions = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as
         </div>
     </div>
 
-    <!-- ALERTS TAB -->
+    <!-- Alerts Tab -->
     <div class="tab-content" id="tab-alerts">
         <div class="table-wrap">
             <table>
@@ -344,40 +329,49 @@ $total_transactions = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as
                 </thead>
                 <tbody>
                 <?php
+                $alerts = mysqli_query($conn, "
+                    SELECT * FROM alerts
+                    WHERE medicine_id = $id
+                    ORDER BY created_at DESC
+                ");
                 if (mysqli_num_rows($alerts) > 0) {
                     $i = 1;
                     while ($row = mysqli_fetch_assoc($alerts)) {
+                        $badge = $row['status'] == 'resolved' ? 'badge-resolved' : 'badge-unread';
                         $date = date('d M Y h:i A', strtotime($row['created_at']));
-                        $status_badge = $row['status'] == 'resolved'
-                            ? "<span class='badge-nodisc'>Resolved</span>"
-                            : "<span class='badge-out'>Unread</span>";
                         echo "<tr>
                             <td>{$i}</td>
                             <td>{$row['message']}</td>
-                            <td>{$status_badge}</td>
+                            <td><span class='badge {$badge}'>{$row['status']}</span></td>
                             <td>{$date}</td>
                         </tr>";
                         $i++;
                     }
                 } else {
-                    echo "<tr><td colspan='4' class='empty-state'>No alerts for this medicine</td></tr>";
+                    echo "<tr><td colspan='4' class='empty-state'>No alerts for this medicine.</td></tr>";
                 }
                 ?>
                 </tbody>
             </table>
         </div>
     </div>
-
 </div>
 
 <script>
-function showTab(name, el) {
+function showTab(tab, btn) {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.getElementById('tab-' + name).classList.add('active');
-    el.classList.add('active');
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    btn.classList.add('active');
+}
+function openSidebar() {
+    document.getElementById('sidebar').classList.add('open');
+    document.getElementById('overlay').classList.add('open');
+}
+function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('overlay').classList.remove('open');
 }
 </script>
-
 </body>
 </html>
